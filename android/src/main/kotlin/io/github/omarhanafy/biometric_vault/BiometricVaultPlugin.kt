@@ -166,6 +166,13 @@ class BiometricVaultPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             return
         }
 
+        if (storage.options.silentWrites && mode == CipherMode.Encrypt) {
+            // Silent-writes storage encrypts with the public key; no
+            // authentication (and no prompt) is ever needed for writes.
+            runOnWorker(result) { task(null) }
+            return
+        }
+
         if (storage.options.androidAuthenticationValidityDuration != null) {
             // Time-bound key: it must not be bound to a CryptoObject. Try the
             // operation first and only show the prompt when the keystore
@@ -309,6 +316,7 @@ class BiometricVaultPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                     ?.toInt()?.seconds,
             authenticationRequired = options["authenticationRequired"] as? Boolean ?: true,
             androidBiometricOnly = options["androidBiometricOnly"] as? Boolean ?: true,
+            silentWrites = options["silentWrites"] as? Boolean ?: false,
         )
     }
 

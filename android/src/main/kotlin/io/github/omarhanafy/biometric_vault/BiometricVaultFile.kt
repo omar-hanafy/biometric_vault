@@ -25,12 +25,31 @@ class BiometricVaultFile(
         /** Directory inside private storage holding all encrypted files. */
         private const val DIRECTORY_NAME = "biometric_vault"
         private const val FILE_SUFFIX_V2 = ".v2.txt"
+
+        /** Envelope (silent-writes) payloads live in their own files. */
+        private const val FILE_SUFFIX_V3 = ".v3.txt"
     }
 
     private val masterKeyName = "${baseName}_master_key"
+
+    /**
+     * Silent writes use RSA envelope encryption instead of the symmetric
+     * master key; only meaningful when reads are authentication-gated.
+     */
+    private val envelopeManager: EnvelopeCryptographyManager? =
+        if (options.silentWrites && options.authenticationRequired) {
+            EnvelopeCryptographyManager(context) {
+                setUserAuthenticationRequired(true)
+                configureUserAuthenticationParameters()
+            }
+        } else {
+            null
+        }
+
+    private val fileSuffix = if (envelopeManager != null) FILE_SUFFIX_V3 else FILE_SUFFIX_V2
     private val baseDir = File(context.filesDir, DIRECTORY_NAME)
-    private val file = File(baseDir, "$baseName$FILE_SUFFIX_V2")
-    private val tempFile = File(baseDir, "$baseName$FILE_SUFFIX_V2.tmp")
+    private val file = File(baseDir, "$baseName$fileSuffix")
+    private val tempFile = File(baseDir, "$baseName$fileSuffix.tmp")
 
     private val cryptographyManager = CryptographyManager(context) {
         setUserAuthenticationRequired(options.authenticationRequired)
@@ -81,26 +100,32 @@ class BiometricVaultFile(
         }
     }
 
-    fun cipherForEncrypt(): Cipher =
-        cryptographyManager.getInitializedCipherForEncryption(masterKeyName)
+    fun cipherForEncrypt(): Cipher {
+        check(envelopeManager == null) {
+            "Silent-writes storage encrypts with the public key and never uses an authenticated cipher."
+        }
+        return cryptographyManager.getInitializedCipherForEncryption(masterKeyName)
+    }
 
-    /** Returns null when no stored payload exists (no IV to initialize with). */
+    /** Returns null when no stored payload exists (nothing to decrypt). */
     fun cipherForDecrypt(): Cipher? {
         if (!file.exists()) {
-            StorageLog.d { "No stored file for $this, no IV to derive a decryption cipher from." }
+            StorageLog.d { "No stored file for $this, nothing to derive a decryption cipher from." }
             return null
         }
-        return cryptographyManager.getInitializedCipherForDecryption(masterKeyName, file)
+        return envelopeManager?.getInitializedCipherForUnwrap(masterKeyName)
+            ?: cryptographyManager.getInitializedCipherForDecryption(masterKeyName, file)
     }
 
     fun exists(): Boolean = file.exists()
 
     @Synchronized
     fun writeFile(cipher: Cipher?, content: String) {
-        // cipher is null when authentication is not required or a time-bound
-        // key is used; in that case the cipher is created on demand.
-        val useCipher = cipher ?: cipherForEncrypt()
-        val payload = cryptographyManager.encryptData(content, useCipher)
+        // Envelope stores encrypt with the public key (silent); symmetric
+        // stores use the provided cipher or create one on demand (null when
+        // authentication is not required or a time-bound key is used).
+        val payload = envelopeManager?.encryptSilently(masterKeyName, content)
+            ?: cryptographyManager.encryptData(content, cipher ?: cipherForEncrypt())
         baseDir.mkdirs()
         if (!baseDir.isDirectory) {
             throw IOException("Unable to create storage directory $baseDir.")
@@ -121,13 +146,25 @@ class BiometricVaultFile(
             StorageLog.d { "File $file does not exist, returning null." }
             return null
         }
+        val envelope = envelopeManager
+        if (envelope != null) {
+            // A null cipher is the time-bound path: initializing here lets
+            // UserNotAuthenticatedException propagate so the plugin prompts.
+            val unwrapCipher = cipher ?: envelope.getInitializedCipherForUnwrap(masterKeyName)
+            return envelope.decrypt(file.readBytes(), unwrapCipher)
+        }
         val useCipher = cipher ?: cipherForDecrypt() ?: return null
         return cryptographyManager.decryptData(file.readBytes(), useCipher)
     }
 
     @Synchronized
     fun deleteFile(): Boolean {
-        cryptographyManager.deleteKey(masterKeyName)
+        val envelope = envelopeManager
+        if (envelope != null) {
+            envelope.deleteKey(masterKeyName)
+        } else {
+            cryptographyManager.deleteKey(masterKeyName)
+        }
         tempFile.delete()
         return file.delete()
     }
