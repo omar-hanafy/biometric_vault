@@ -79,6 +79,10 @@ class BiometricVaultPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                 "canAuthenticate" ->
                     result.success(authenticator.canAuthenticate(parseInitOptions(call)).name)
 
+                "biometryType" -> result.success(authenticator.biometryType())
+
+                "authenticate" -> authenticateWithoutStorage(call, result)
+
                 "init" -> initStorage(call, result)
 
                 "dispose" -> disposeStorage(call, result)
@@ -121,6 +125,42 @@ class BiometricVaultPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             }
         } catch (e: Throwable) {
             sendError(result, e, call.method)
+        }
+    }
+
+    /**
+     * Standalone authentication without any storage or crypto object, for
+     * app-lock style gates. Success replies `true`; failures reply the same
+     * `AuthError:*` codes as storage operations.
+     */
+    @MainThread
+    private fun authenticateWithoutStorage(call: MethodCall, result: MainThreadResult) {
+        val biometricOnly = call.argument<Boolean>("biometricOnly") ?: false
+        val promptInfo = promptInfoProvider(call)
+        val activity = attachedActivity
+        if (activity == null) {
+            StorageLog.e("Cannot show a biometric prompt without a foreground FragmentActivity.")
+            result.error(
+                "AuthError:${AuthenticationError.FailedToStart}",
+                "Plugin is not attached to a FragmentActivity. " +
+                    "Use FlutterFragmentActivity in your app.",
+                null,
+            )
+            return
+        }
+        authenticator.authenticate(
+            activity,
+            cipher = null,
+            promptInfo(),
+            InitOptions(androidBiometricOnly = biometricOnly),
+            onSuccess = { result.success(true) },
+        ) { errorInfo ->
+            StorageLog.e("AuthError: $errorInfo")
+            result.error(
+                "AuthError:${errorInfo.error}",
+                errorInfo.message.toString(),
+                errorInfo.errorDetails,
+            )
         }
     }
 
