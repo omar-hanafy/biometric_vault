@@ -1,9 +1,9 @@
 # Changelog
 
-## 1.0.0-dev.1
+## 1.0.0
 
-Initial release of `biometric_vault`: encrypted storage for small secrets
-(tokens, passwords, key material) with optional biometric protection.
+Initial stable release of `biometric_vault`: encrypted storage for small
+secrets (tokens, passwords, key material) with optional biometric protection.
 
 ### Features
 
