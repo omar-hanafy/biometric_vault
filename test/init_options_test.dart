@@ -11,7 +11,14 @@ void main() {
         'authenticationRequired': true,
         'androidBiometricOnly': true,
         'darwinBiometricOnly': true,
+        'silentWrites': false,
       });
+    });
+
+    test('silentWrites serializes when enabled', () {
+      final options = StorageFileInitOptions(silentWrites: true);
+      expect(options.silentWrites, isTrue);
+      expect(options.toJson()['silentWrites'], isTrue);
     });
 
     test('durations serialize as whole seconds', () {
@@ -34,6 +41,7 @@ void main() {
         'authenticationRequired': false,
         'androidBiometricOnly': false,
         'darwinBiometricOnly': false,
+        'silentWrites': false,
       });
     });
 

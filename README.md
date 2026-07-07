@@ -17,7 +17,15 @@ fingerprint / device-credential authentication.
   TEE fallback) with AES-GCM; iOS/macOS Keychain with `SecAccessControl`.
 - **Precise capability reporting.** `canAuthenticate()` tells you exactly why
   authentication is unavailable: nothing enrolled, no hardware, locked out,
-  pending security update, and more.
+  pending security update, and more. `biometryType()` tells you what to call
+  it in your UI: Face ID, Touch ID, fingerprint, and friends.
+- **Silent writes for rotating secrets.** With
+  `StorageFileInitOptions(silentWrites: true)` writes never prompt (envelope
+  encryption on Android, replace-on-write on iOS/macOS) while reads stay
+  fully gated. Persist a rotated refresh token from a background refresh
+  without interrupting anyone.
+- **Standalone authentication.** `authenticate()` shows the system prompt
+  without touching any storage, for app-lock style privacy gates.
 - **Fail-fast validation.** Invalid store names or impossible option
   combinations throw `ArgumentError` at `getStorage`, not a native error at
   first use in production.
@@ -47,7 +55,7 @@ Add the dependency:
 
 ```yaml
 dependencies:
-  biometric_vault: ^1.0.0
+  biometric_vault: ^1.1.0
 ```
 
 ### Android
@@ -154,6 +162,59 @@ final store = await BiometricVault().getStorage(
 Set `authenticationRequired: false` to store values through the platform
 keystore without any authentication prompt (useful as a fallback when
 `canAuthenticate` reports that biometry is unavailable).
+
+### Silent writes
+
+For secrets that rotate while the app runs (refresh tokens, session keys),
+create the store with `silentWrites: true`: every `write()` completes without
+any prompt, while `read()` keeps requiring authentication.
+
+```dart
+final tokenStore = await BiometricVault().getStorage(
+  'refresh_token',
+  options: StorageFileInitOptions(silentWrites: true),
+);
+
+await tokenStore.write(rotatedToken); // never prompts
+final token = await tokenStore.read(); // prompts as usual
+```
+
+On Android this uses envelope encryption: the payload is encrypted with a
+fresh AES-256-GCM key that is wrapped by a Keystore RSA public key, and only
+the private (read) half requires user authentication. On iOS and macOS the
+write replaces the keychain item, which never evaluates its access control.
+
+One consequence worth knowing: after the user changes biometric enrollment,
+reads throw `StorageInvalidatedException` as usual, but writes keep working,
+so your next sign-in can silently re-provision the secret.
+
+### Biometry labels and app-lock gates
+
+`biometryType()` reports the device's biometry modality so UI copy can say
+"Face ID" instead of a generic "biometrics" (and not say "Face ID" on a
+Touch ID device):
+
+```dart
+final label = switch (await BiometricVault().biometryType()) {
+  BiometryType.faceId => 'Face ID',
+  BiometryType.touchId => 'Touch ID',
+  BiometryType.fingerprint => 'Fingerprint',
+  _ => 'Biometrics',
+};
+```
+
+`authenticate()` shows the system prompt without touching any storage, which
+is exactly what an app-lock privacy gate needs (proof of presence, no key
+material):
+
+```dart
+try {
+  await BiometricVault().authenticate(); // device credential fallback allowed
+  unlockTheUi();
+} on AuthException catch (e) {
+  // e.code says what happened: userCanceled, lockedOut, ...
+}
+```
 
 ### Error handling
 

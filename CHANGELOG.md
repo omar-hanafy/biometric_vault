@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0-dev.1
+
+- `StorageFileInitOptions.silentWrites`: writes never show an authentication
+  prompt while reads stay gated. Android uses envelope encryption (payload
+  under a fresh AES-256-GCM key, wrapped by a Keystore RSA public key whose
+  private half is authentication-gated); iOS and macOS replace the keychain
+  item on write, which never evaluates its access control.
+- `BiometricVault.biometryType()`: reports the device biometry modality
+  (Face ID, Touch ID, Optic ID, fingerprint, face, iris) so UI copy can name
+  the actual authenticator.
+- `BiometricVault.authenticate()`: standalone user authentication without any
+  storage, for app-lock style privacy gates. Supports biometric-only mode or
+  device-credential fallback.
+
 ## 1.0.0-dev.2
 
 - No functional changes. First version published through the automated

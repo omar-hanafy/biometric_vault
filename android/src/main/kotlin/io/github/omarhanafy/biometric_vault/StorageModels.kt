@@ -26,6 +26,11 @@ data class InitOptions(
     val androidAuthenticationValidityDuration: Duration? = null,
     val authenticationRequired: Boolean = true,
     val androidBiometricOnly: Boolean = true,
+    /**
+     * When true (and authentication is required), writes encrypt with the
+     * store's RSA public key and never prompt; only reads authenticate.
+     */
+    val silentWrites: Boolean = false,
 )
 
 /** Texts and behavior of the system authentication prompt, from the Dart side. */
