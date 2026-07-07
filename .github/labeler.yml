@@ -1,0 +1,9 @@
+release:
+  - changed-files:
+      - any-glob-to-any-file:
+          - pubspec.yaml
+          - CHANGELOG.md
+          - README.md
+          - ios/biometric_vault.podspec
+          - macos/biometric_vault.podspec
+          - .github/workflows/**

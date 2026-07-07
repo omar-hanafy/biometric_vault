@@ -1,0 +1,67 @@
+name: biometric_vault
+description: >-
+  Secure storage with optional biometric protection for Android, iOS, and
+  macOS. Linux, Windows, and web fall back to unauthenticated storage.
+version: 1.0.0-dev.1
+homepage: https://github.com/omar-hanafy/biometric_vault
+repository: https://github.com/omar-hanafy/biometric_vault
+issue_tracker: https://github.com/omar-hanafy/biometric_vault/issues
+
+environment:
+  # Flutter 3.44 / Dart 3.12 are required for Built-in Kotlin on Android.
+  sdk: '>=3.12.0 <4.0.0'
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+
+  plugin_platform_interface: ^2.1.8
+
+  ffi: ^2.2.0
+  win32: ^6.3.0
+  web: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter.
+flutter:
+  # This section identifies this Flutter project as a plugin project.
+  # The androidPackage and pluginClass identifiers should not ordinarily
+  # be modified. They are used by the tooling to maintain consistency when
+  # adding or updating assets for this project.
+  plugin:
+    platforms:
+      android:
+        package: io.github.omarhanafy.biometric_vault
+        pluginClass: BiometricVaultPlugin
+      ios:
+        pluginClass: BiometricVaultPlugin
+      macos:
+        pluginClass: BiometricVaultMacOSPlugin
+      linux:
+        pluginClass: BiometricVaultPlugin
+      windows:
+        dartPluginClass: Win32BiometricVaultPlugin
+        fileName: src/biometric_vault_win32.dart
+      web:
+        pluginClass: BiometricVaultPluginWeb
+        fileName: src/biometric_vault_web.dart
+
+topics:
+  - biometrics
+  - encryption
+  - storage
+  - security
+  - secure-storage
+screenshots:
+  - description: 'Face ID on iPhone'
+    path: doc/screenshot_ios.png
