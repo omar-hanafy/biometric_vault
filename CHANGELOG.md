@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0-dev.2
+
+- No functional changes. First version published through the automated
+  release pipeline (GitHub Actions Trusted Publishing).
+
 ## 1.0.0-dev.1
 
 Initial release of `biometric_vault`: encrypted storage for small secrets
