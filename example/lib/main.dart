@@ -74,6 +74,9 @@ class MyAppState extends State<MyApp> {
   final String baseName = 'default';
 
   static final _authStorageInitOptions = StorageFileInitOptions();
+  static final _silentWritesInitOptions = StorageFileInitOptions(
+    silentWrites: true,
+  );
   static final _customPromptInitOptions = StorageFileInitOptions(
     androidBiometricOnly: false,
     androidAuthenticationValidityDuration: const Duration(seconds: 5),
@@ -86,6 +89,7 @@ class MyAppState extends State<MyApp> {
   BiometricVaultFile? _authStorage;
   BiometricVaultFile? _storage;
   BiometricVaultFile? _customPrompt;
+  BiometricVaultFile? _silentWrites;
 
   final TextEditingController _writeController = TextEditingController(
     text: 'Lorem Ipsum',
@@ -142,6 +146,10 @@ class MyAppState extends State<MyApp> {
                     '${baseName}_authenticated',
                     options: _authStorageInitOptions,
                   );
+                  _silentWrites = await BiometricVault().getStorage(
+                    '${baseName}_silentWrites',
+                    options: _silentWritesInitOptions,
+                  );
                 }
                 _storage = await BiometricVault().getStorage(
                   '${baseName}_unauthenticated',
@@ -173,6 +181,39 @@ class MyAppState extends State<MyApp> {
                 setState(() {});
                 _logger.info('initiailzed $baseName');
               },
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  child: const Text('biometry type'),
+                  onPressed: () async {
+                    final type = await BiometricVault().biometryType();
+                    _logger.info('biometryType: $type');
+                  },
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  child: const Text('authenticate'),
+                  onPressed: () async {
+                    try {
+                      await BiometricVault().authenticate(
+                        promptInfo: const PromptInfo(
+                          iosPromptInfo: DarwinPromptInfo(
+                            accessTitle: 'Unlock the example app',
+                          ),
+                          androidPromptInfo: AndroidPromptInfo(
+                            title: 'Unlock the example app',
+                          ),
+                        ),
+                      );
+                      _logger.info('authenticate: success');
+                    } on BiometricVaultException catch (e) {
+                      _logger.info('authenticate failed: $e');
+                    }
+                  },
+                ),
+              ],
             ),
             ...?_appArmorButton(),
             ...(_authStorage == null
@@ -210,6 +251,19 @@ class MyAppState extends State<MyApp> {
                     ),
                     StorageActions(
                       storageFile: _customPrompt!,
+                      writeController: _writeController,
+                    ),
+                    const Divider(),
+                  ]),
+            ...?(_silentWrites == null
+                ? null
+                : [
+                    const Text(
+                      'Silent writes (write never prompts, read does)',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    StorageActions(
+                      storageFile: _silentWrites!,
                       writeController: _writeController,
                     ),
                     const Divider(),
