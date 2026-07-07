@@ -86,6 +86,57 @@ const _canAuthenticateMapping = {
   'ErrorUnknown': CanAuthenticateResponse.unsupported,
 };
 
+/// The biometry modality a device offers, as reported by
+/// [BiometricVault.biometryType].
+///
+/// Use this to label authentication UI accurately ("Sign in with Face ID"
+/// instead of a generic "Use biometrics"). The value describes the
+/// **hardware capability**, not whether the user has enrolled: combine it
+/// with [BiometricVault.canAuthenticate] before offering biometric UI.
+enum BiometryType {
+  /// The device has no biometric hardware, or the platform (Windows, web,
+  /// Linux) cannot report one.
+  none,
+
+  /// Apple Face ID (iOS and macOS).
+  faceId,
+
+  /// Apple Touch ID (iOS and macOS).
+  touchId,
+
+  /// Apple Optic ID (visionOS-class devices; reported on iOS 17+ SDKs).
+  opticId,
+
+  /// A fingerprint sensor (Android).
+  fingerprint,
+
+  /// Face recognition hardware (Android).
+  face,
+
+  /// An iris scanner (Android).
+  iris,
+
+  /// The device declares more than one biometric modality (Android); the
+  /// system prompt decides which one is used.
+  multiple,
+
+  /// Biometric hardware exists but the platform does not say which kind.
+  /// Also returned for wire values this package version does not know yet.
+  unknown,
+}
+
+const _biometryTypeMapping = {
+  'None': BiometryType.none,
+  'FaceId': BiometryType.faceId,
+  'TouchId': BiometryType.touchId,
+  'OpticId': BiometryType.opticId,
+  'Fingerprint': BiometryType.fingerprint,
+  'Face': BiometryType.face,
+  'Iris': BiometryType.iris,
+  'Multiple': BiometryType.multiple,
+  'Unknown': BiometryType.unknown,
+};
+
 /// The reason an authentication-gated operation failed, carried by
 /// [AuthException.code].
 ///
@@ -308,6 +359,7 @@ class StorageFileInitOptions {
     this.authenticationRequired = true,
     this.androidBiometricOnly = true,
     this.darwinBiometricOnly = true,
+    this.silentWrites = false,
   });
 
   /// How long one successful authentication stays valid on Android.
@@ -369,6 +421,27 @@ class StorageFileInitOptions {
   /// item becomes unreadable if the user re-enrolls biometry.
   final bool darwinBiometricOnly;
 
+  /// Whether [BiometricVaultFile.write] completes without any
+  /// authentication prompt while [BiometricVaultFile.read] stays gated.
+  ///
+  /// Designed for frequently rotated secrets (such as refresh tokens):
+  /// the app can persist a new value at any time - even from a background
+  /// refresh - and the user only authenticates when the value is read back.
+  ///
+  /// How it works: on Android the payload is encrypted with a fresh
+  /// AES-256-GCM key that is wrapped by an RSA public key; only the
+  /// RSA private key (which unwraps during [BiometricVaultFile.read]) is
+  /// gated by user authentication. On iOS and macOS writes replace the
+  /// keychain item (delete + add), which never evaluates the item's access
+  /// control; reads still do.
+  ///
+  /// After a biometric re-enrollment the read key is invalidated as usual
+  /// ([StorageInvalidatedException]) but writes keep succeeding, so an app
+  /// can silently re-provision the secret on its next sign-in.
+  ///
+  /// Has no effect when [authenticationRequired] is `false`.
+  final bool silentWrites;
+
   /// The wire representation sent to the platform implementations.
   ///
   /// The key names are a fixed part of the plugin's internal protocol.
@@ -382,6 +455,7 @@ class StorageFileInitOptions {
     'authenticationRequired': authenticationRequired,
     'androidBiometricOnly': androidBiometricOnly,
     'darwinBiometricOnly': darwinBiometricOnly,
+    'silentWrites': silentWrites,
   };
 }
 
@@ -537,6 +611,42 @@ abstract class BiometricVault extends PlatformInterface {
   /// Always returns `false` on other platforms.
   Future<bool> linuxCheckAppArmorError();
 
+  /// The biometry modality this device offers, for accurate UI labels.
+  ///
+  /// Reports the hardware capability (Face ID vs Touch ID vs fingerprint),
+  /// NOT whether the user has enrolled or can authenticate right now; check
+  /// [canAuthenticate] for that. Platforms without biometric support
+  /// (Windows, web, Linux) report [BiometryType.none].
+  Future<BiometryType> biometryType() async => BiometryType.none;
+
+  /// Authenticates the user without touching any storage.
+  ///
+  /// Use this for gates that only need proof of presence, such as an
+  /// app-lock screen shown when the app returns from the background. It
+  /// does NOT unlock any [BiometricVaultFile]; reads still authenticate on
+  /// their own terms.
+  ///
+  /// Completes normally when the user authenticated. Throws an
+  /// [AuthException] when authentication fails, is canceled, or cannot
+  /// start; the [AuthExceptionCode] states the exact reason.
+  ///
+  /// With [biometricOnly] set to `true` only biometrics are accepted; the
+  /// default also offers the device credential (passcode, PIN, pattern) as
+  /// a fallback, which is usually right for privacy gates.
+  ///
+  /// On platforms without user authentication (Windows, web, Linux) this
+  /// throws a [BiometricVaultPluginException] with code `Unsupported`;
+  /// call [canAuthenticate] first to avoid that.
+  Future<void> authenticate({
+    PromptInfo promptInfo = PromptInfo.defaultValues,
+    bool biometricOnly = false,
+  }) async => throw const BiometricVaultPluginException(
+    'Unsupported',
+    'User authentication is not supported on this platform. '
+        'Check canAuthenticate() before calling authenticate().',
+    null,
+  );
+
   /// Opens (creating on first use) the storage file named [name].
   ///
   /// Each name is a fully separate store with its own encryption key and
@@ -617,6 +727,61 @@ class MethodChannelBiometricVault extends BiometricVault {
       case TargetPlatform.windows:
       case TargetPlatform.fuchsia:
         return CanAuthenticateResponse.unsupported;
+    }
+  }
+
+  @override
+  Future<BiometryType> biometryType() async {
+    if (kIsWeb) {
+      return BiometryType.none;
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        final response = await _transformErrors(
+          _channel.invokeMethod<String>('biometryType'),
+        );
+        // Lenient by design: a newer native side may report a modality this
+        // Dart version does not know yet; that is not an error condition.
+        return _biometryTypeMapping[response] ?? BiometryType.unknown;
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+      case TargetPlatform.fuchsia:
+        return BiometryType.none;
+    }
+  }
+
+  @override
+  Future<void> authenticate({
+    PromptInfo promptInfo = PromptInfo.defaultValues,
+    bool biometricOnly = false,
+  }) async {
+    if (kIsWeb) {
+      return super.authenticate(
+        promptInfo: promptInfo,
+        biometricOnly: biometricOnly,
+      );
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+        await _transformErrors(
+          _channel.invokeMethod<void>('authenticate', <String, dynamic>{
+            'biometricOnly': biometricOnly,
+            ..._promptInfoForCurrentPlatform(promptInfo),
+          }),
+        );
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+      case TargetPlatform.fuchsia:
+        // The libsecret, Windows, and fuchsia backends have no user
+        // authentication; the base class throws the documented exception.
+        await super.authenticate(
+          promptInfo: promptInfo,
+          biometricOnly: biometricOnly,
+        );
     }
   }
 

@@ -2,7 +2,7 @@ name: biometric_vault
 description: >-
   Secure storage with optional biometric protection for Android, iOS, and
   macOS. Linux, Windows, and web fall back to unauthenticated storage.
-version: 1.0.0
+version: 1.1.0
 homepage: https://github.com/omar-hanafy/biometric_vault
 repository: https://github.com/omar-hanafy/biometric_vault
 issue_tracker: https://github.com/omar-hanafy/biometric_vault/issues

@@ -2,6 +2,7 @@ package io.github.omarhanafy.biometric_vault
 
 import android.app.KeyguardManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.annotation.MainThread
 import androidx.biometric.BiometricManager
@@ -42,6 +43,35 @@ class BiometricAuthenticator(private val context: Context) {
             return CanAuthenticateResponse.ErrorPasscodeNotSet
         }
         return response
+    }
+
+    /**
+     * The biometry modality this device declares, as the wire name consumed
+     * by the Dart `BiometryType` mapping.
+     *
+     * Reports hardware capability from the package manager features, not
+     * enrollment state; `canAuthenticate` answers the enrollment question.
+     */
+    fun biometryType(): String {
+        val hardware = biometricManager.canAuthenticate(BIOMETRIC_STRONG)
+        if (hardware == BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE) return "None"
+
+        val packageManager = context.packageManager
+        val modalities = buildList {
+            if (packageManager.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT)) {
+                add("Fingerprint")
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (packageManager.hasSystemFeature(PackageManager.FEATURE_FACE)) add("Face")
+                if (packageManager.hasSystemFeature(PackageManager.FEATURE_IRIS)) add("Iris")
+            }
+        }
+        return when {
+            modalities.size > 1 -> "Multiple"
+            modalities.size == 1 -> modalities.single()
+            // The biometric manager sees hardware the feature flags miss.
+            else -> "Unknown"
+        }
     }
 
     /**
