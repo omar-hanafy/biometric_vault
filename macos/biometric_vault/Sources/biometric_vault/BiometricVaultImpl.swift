@@ -62,12 +62,18 @@ struct InitOptions {
       params["darwinTouchIDAuthenticationForceReuseContextDurationSeconds"] as? Int
     authenticationRequired = params["authenticationRequired"] as? Bool ?? true
     darwinBiometricOnly = params["darwinBiometricOnly"] as? Bool ?? true
+    silentWrites = params["silentWrites"] as? Bool ?? false
   }
 
   let darwinTouchIDAuthenticationAllowableReuseDuration: Int?
   let darwinTouchIDAuthenticationForceReuseContextDuration: Int?
   let authenticationRequired: Bool
   let darwinBiometricOnly: Bool
+
+  /// When true, writes replace the keychain item (delete + add) without any
+  /// authentication context, so they never prompt; reads stay gated through
+  /// the item's access control.
+  let silentWrites: Bool
 }
 
 struct IOSPromptInfo {
@@ -172,6 +178,17 @@ class BiometricVaultImpl {
       guard let optionsParams: [String: Any] = requiredArg("options") else { return }
       canAuthenticate(options: InitOptions(params: optionsParams), result: result)
 
+    case "biometryType":
+      biometryType(result: result)
+
+    case "authenticate":
+      let biometricOnly = args["biometricOnly"] as? Bool ?? false
+      let promptParams = args["iosPromptInfo"] as? [String: Any] ?? [:]
+      authenticate(
+        biometricOnly: biometricOnly,
+        reason: IOSPromptInfo(params: promptParams).accessTitle ?? "Authenticate",
+        result: result)
+
     case "init":
       guard let name: String = requiredArg("name"),
             let optionsParams: [String: Any] = requiredArg("options") else { return }
@@ -240,6 +257,84 @@ class BiometricVaultImpl {
     }
     os_log(.info, log: logger, "canEvaluatePolicy failed: %{public}@", error)
     completeOnMain(Self.canAuthenticateCode(for: error), result)
+  }
+
+  /// Reports the biometry modality as the wire name consumed by the Dart
+  /// `BiometryType` mapping. `LAContext.biometryType` is only populated
+  /// after a policy evaluation, hence the probing `canEvaluatePolicy` call.
+  private func biometryType(result: @escaping StorageCallback) {
+    let context = environment.contextFactory()
+    var error: NSError?
+    _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+    let name: String
+    switch context.biometryType {
+    case .faceID:
+      name = "FaceId"
+    case .touchID:
+      name = "TouchId"
+    case .none:
+      name = "None"
+    default:
+      if #available(iOS 17.0, macOS 14.0, *), context.biometryType == .opticID {
+        name = "OpticId"
+      } else {
+        name = "Unknown"
+      }
+    }
+    completeOnMain(name, result)
+  }
+
+  /// Standalone user authentication without any keychain item, for app-lock
+  /// style gates. Replies `true` on success and the same `AuthError:*` codes
+  /// as storage operations on failure.
+  private func authenticate(
+    biometricOnly: Bool, reason: String, result: @escaping StorageCallback
+  ) {
+    let policy: LAPolicy = biometricOnly
+      ? .deviceOwnerAuthenticationWithBiometrics
+      : .deviceOwnerAuthentication
+    let context = environment.contextFactory()
+    if biometricOnly {
+      // An empty fallback title hides the passcode button entirely.
+      context.localizedFallbackTitle = ""
+    }
+    let storageError = self.storageError
+    context.evaluatePolicy(policy, localizedReason: reason) { success, error in
+      if success {
+        completeOnMain(true, result)
+        return
+      }
+      let code = Self.authenticateErrorCode(for: error as NSError?)
+      let message = (error as NSError?)?.localizedDescription ?? "Authentication failed."
+      os_log(.info, log: logger, "authenticate failed: %{public}@ (%{public}@)", code, message)
+      completeOnMain(storageError(code, message, nil), result)
+    }
+  }
+
+  private static func authenticateErrorCode(for error: NSError?) -> String {
+    guard let error, error.domain == LAErrorDomain else {
+      return "AuthError:Unknown"
+    }
+    switch LAError(_nsError: error).code {
+    case .userCancel, .userFallback:
+      // userFallback only fires when the fallback button is visible but no
+      // fallback exists (biometric-only); the user opted out either way.
+      return "AuthError:UserCanceled"
+    case .systemCancel, .appCancel, .notInteractive:
+      return "AuthError:Canceled"
+    case .authenticationFailed:
+      return "AuthError:AuthenticationFailed"
+    case .biometryLockout:
+      return "AuthError:LockedOut"
+    case .biometryNotEnrolled:
+      return "AuthError:NoBiometricEnrolled"
+    case .biometryNotAvailable:
+      return "AuthError:HardwareUnavailable"
+    case .passcodeNotSet:
+      return "AuthError:PasscodeNotSet"
+    default:
+      return "AuthError:Unknown"
+    }
   }
 
   private static func canAuthenticateCode(for error: NSError) -> String {
@@ -383,13 +478,30 @@ class BiometricVaultFile {
           return
         }
         attributes[kSecAttrAccessControl as String] = accessControl
-        let operationContext = authContext(reason: promptInfo.saveTitle)
-        attributes[kSecUseAuthenticationContext as String] = operationContext
-        context = operationContext
+        if !options.silentWrites {
+          let operationContext = authContext(reason: promptInfo.saveTitle)
+          attributes[kSecUseAuthenticationContext as String] = operationContext
+          context = operationContext
+        }
       } else {
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
       }
       attributes[kSecValueData as String] = value
+
+      if options.authenticationRequired && options.silentWrites {
+        // Silent write: replace the item. SecItemAdd never evaluates the
+        // access control (it only applies to future reads), and skipping the
+        // update path avoids the prompt SecItemUpdate would trigger on a
+        // protected item.
+        _ = env.keychain.delete(baseQuery)
+        let status = env.keychain.add(attributes)
+        guard status == errSecSuccess else {
+          completeError(status, while: "writing data", result)
+          return
+        }
+        completeOnMain(nil, result)
+        return
+      }
 
       var status = env.keychain.add(attributes)
       if status == errSecDuplicateItem {

@@ -87,6 +87,13 @@ private final class FakeLAContext: LAContext {
   var canEvaluateError: NSError?
   private(set) var evaluatedPolicies: [LAPolicy] = []
 
+  var biometryTypeOverride: LABiometryType = .none
+  override var biometryType: LABiometryType { biometryTypeOverride }
+
+  var evaluateResult = true
+  var evaluateError: NSError?
+  private(set) var evaluateCalls: [(policy: LAPolicy, reason: String)] = []
+
   private var reuseDuration: TimeInterval = 0
   override var touchIDAuthenticationAllowableReuseDuration: TimeInterval {
     get { reuseDuration }
@@ -99,6 +106,13 @@ private final class FakeLAContext: LAContext {
       error?.pointee = canEvaluateError
     }
     return canEvaluateResult
+  }
+
+  override func evaluatePolicy(
+    _ policy: LAPolicy, localizedReason: String, reply: @escaping (Bool, Error?) -> Void
+  ) {
+    evaluateCalls.append((policy: policy, reason: localizedReason))
+    reply(evaluateResult, evaluateError)
   }
 }
 
@@ -537,6 +551,169 @@ final class RunnerTests: XCTestCase {
     let value = invoke(impl, "write", promptArgs(extra: ["content": "x"]))
     assertError(value, code: "SecurityError")
     XCTAssertTrue(keychain.addedAttributes.isEmpty)
+  }
+
+  // MARK: silent writes
+
+  func testSilentWriteReplacesItemWithoutAuthContext() {
+    let impl = makeImpl()
+    initStore(impl, "vault", options: ["silentWrites": true])
+
+    let value = invoke(
+      impl, "write",
+      promptArgs("vault", save: "Unlock to save", extra: ["content": "s3cret"]))
+
+    XCTAssertNil(value)
+    // Silent writes replace the item: delete first, then add. The update
+    // path (which prompts on protected items) must never be used.
+    XCTAssertEqual(keychain.deleteQueries.count, 1)
+    XCTAssertEqual(keychain.addedAttributes.count, 1)
+    XCTAssertTrue(keychain.updateCalls.isEmpty)
+
+    let attributes = keychain.addedAttributes[0]
+    XCTAssertEqual(
+      Set(attributes.keys),
+      keys([
+        kSecClass, kSecAttrService, kSecAttrAccount, kSecValueData,
+        kSecAttrAccessControl, kSecUseDataProtectionKeychain,
+      ]),
+      "silent writes must not attach an authentication context")
+    XCTAssertEqual(recordedAccessControlFlags, [.biometryCurrentSet],
+                   "reads stay gated: the access control still applies")
+    XCTAssertEqual(contextFactoryCallCount, 0,
+                   "no LAContext may be created for a silent write")
+  }
+
+  func testSilentWriteFailureStillMapsErrors() {
+    let impl = makeImpl()
+    initStore(impl, options: ["silentWrites": true])
+    keychain.addResult = errSecNotAvailable
+    assertError(invoke(impl, "write", promptArgs(extra: ["content": "x"])),
+                code: "SecurityError")
+  }
+
+  func testSilentWritesLeaveReadsGated() {
+    let impl = makeImpl()
+    initStore(impl, options: ["silentWrites": true])
+    keychain.copyMatchingResult = (errSecItemNotFound, nil)
+
+    invoke(impl, "read", promptArgs())
+
+    let query = keychain.copyMatchingQueries[0]
+    XCTAssertNotNil(query[kSecUseAuthenticationContext as String],
+                    "reads on a silent-writes store still authenticate")
+  }
+
+  func testNonSilentWriteStillUsesUpdatePath() {
+    let impl = makeImpl()
+    initStore(impl)
+    keychain.addResult = errSecDuplicateItem
+
+    invoke(impl, "write", promptArgs(extra: ["content": "updated"]))
+
+    XCTAssertEqual(keychain.updateCalls.count, 1)
+    XCTAssertTrue(keychain.deleteQueries.isEmpty)
+  }
+
+  // MARK: biometryType
+
+  private func biometryTypeResult(_ type: LABiometryType) -> Any? {
+    let context = FakeLAContext()
+    context.biometryTypeOverride = type
+    let impl = makeImpl(nextContext: { context })
+    return invoke(impl, "biometryType", nil)
+  }
+
+  func testBiometryTypeMapsFaceId() {
+    XCTAssertEqual(biometryTypeResult(.faceID) as? String, "FaceId")
+  }
+
+  func testBiometryTypeMapsTouchId() {
+    XCTAssertEqual(biometryTypeResult(.touchID) as? String, "TouchId")
+  }
+
+  func testBiometryTypeMapsNone() {
+    XCTAssertEqual(biometryTypeResult(.none) as? String, "None")
+  }
+
+  func testBiometryTypeProbesPolicyFirst() {
+    // biometryType is only populated after canEvaluatePolicy, so the
+    // implementation must probe before reading it.
+    let context = FakeLAContext()
+    context.biometryTypeOverride = .faceID
+    let impl = makeImpl(nextContext: { context })
+    _ = invoke(impl, "biometryType", nil)
+    XCTAssertEqual(context.evaluatedPolicies, [.deviceOwnerAuthenticationWithBiometrics])
+  }
+
+  // MARK: authenticate
+
+  func testAuthenticateSuccessReturnsTrueAndUsesDeviceOwnerPolicy() {
+    let context = FakeLAContext()
+    context.evaluateResult = true
+    let impl = makeImpl(nextContext: { context })
+
+    let value = invoke(
+      impl, "authenticate",
+      ["biometricOnly": false, "iosPromptInfo": ["accessTitle": "Unlock the app"]])
+
+    XCTAssertEqual(value as? Bool, true)
+    XCTAssertEqual(context.evaluateCalls.count, 1)
+    XCTAssertEqual(context.evaluateCalls[0].policy, .deviceOwnerAuthentication)
+    XCTAssertEqual(context.evaluateCalls[0].reason, "Unlock the app")
+  }
+
+  func testAuthenticateBiometricOnlyUsesBiometricsPolicyAndHidesFallback() {
+    let context = FakeLAContext()
+    context.evaluateResult = true
+    let impl = makeImpl(nextContext: { context })
+
+    invoke(impl, "authenticate",
+           ["biometricOnly": true, "iosPromptInfo": ["accessTitle": "Verify"]])
+
+    XCTAssertEqual(context.evaluateCalls[0].policy, .deviceOwnerAuthenticationWithBiometrics)
+    XCTAssertEqual(context.localizedFallbackTitle, "",
+                   "biometric-only must hide the passcode fallback button")
+  }
+
+  func testAuthenticateUserCancelMapsToAuthErrorUserCanceled() {
+    let context = FakeLAContext()
+    context.evaluateResult = false
+    context.evaluateError = laError(LAError.userCancel.rawValue)
+    let impl = makeImpl(nextContext: { context })
+    assertError(
+      invoke(impl, "authenticate", ["iosPromptInfo": ["accessTitle": "Verify"]]),
+      code: "AuthError:UserCanceled")
+  }
+
+  func testAuthenticateLockoutMapsToAuthErrorLockedOut() {
+    let context = FakeLAContext()
+    context.evaluateResult = false
+    context.evaluateError = laError(LAError.biometryLockout.rawValue)
+    let impl = makeImpl(nextContext: { context })
+    assertError(
+      invoke(impl, "authenticate", ["iosPromptInfo": ["accessTitle": "Verify"]]),
+      code: "AuthError:LockedOut")
+  }
+
+  func testAuthenticateSystemCancelMapsToAuthErrorCanceled() {
+    let context = FakeLAContext()
+    context.evaluateResult = false
+    context.evaluateError = laError(LAError.systemCancel.rawValue)
+    let impl = makeImpl(nextContext: { context })
+    assertError(
+      invoke(impl, "authenticate", ["iosPromptInfo": ["accessTitle": "Verify"]]),
+      code: "AuthError:Canceled")
+  }
+
+  func testAuthenticateNotEnrolledMapsToAuthErrorNoBiometricEnrolled() {
+    let context = FakeLAContext()
+    context.evaluateResult = false
+    context.evaluateError = laError(LAError.biometryNotEnrolled.rawValue)
+    let impl = makeImpl(nextContext: { context })
+    assertError(
+      invoke(impl, "authenticate", ["iosPromptInfo": ["accessTitle": "Verify"]]),
+      code: "AuthError:NoBiometricEnrolled")
   }
 
   // MARK: errSecAuthFailed lockout attribution
