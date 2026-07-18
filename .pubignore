@@ -1,0 +1,36 @@
+# When .pubignore exists, pub uses it INSTEAD of .gitignore in this directory,
+# so this file re-states the root .gitignore exclusions and then adds
+# publish-only exclusions below.
+
+.idea/
+*.iml
+.gradle/
+build/
+out/
+node_modules/
+pubspec.lock
+example/pubspec.lock
+.DS_Store
+.dart_tool/
+.packages
+.pub/
+.flutter-plugins-dependencies
+example/android/app/_debug-full-r8-config.txt
+example/ios/Flutter/ephemeral/
+.vscode
+.gradletasknamecache
+.build/
+
+# Publish-only exclusions.
+#
+# The agent plugin (Claude Code / Codex skills) is distributed from the Git
+# repository via the marketplace catalogs, never through the pub.dev archive:
+# pub always strips hidden directories, which would ship the skills without
+# the .claude-plugin/.codex-plugin manifests required to install them.
+agent_plugin/
+
+# Repository maintenance tooling and maintainer agent guidance; not needed
+# by package consumers (and they reference repo-only paths).
+tool/
+AGENTS.md
+CLAUDE.md

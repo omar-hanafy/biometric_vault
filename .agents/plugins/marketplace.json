@@ -1,0 +1,15 @@
+{
+  "name": "biometric-vault",
+  "interface": {
+    "displayName": "Biometric Vault"
+  },
+  "plugins": [
+    {
+      "name": "biometric-vault",
+      "source": {
+        "source": "local",
+        "path": "./agent_plugin/biometric-vault"
+      }
+    }
+  ]
+}

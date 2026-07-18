@@ -1,0 +1,32 @@
+{
+  "name": "biometric-vault",
+  "description": "Agent plugin marketplace for the biometric_vault Flutter package: integration, troubleshooting, testing, and migration skills.",
+  "owner": {
+    "name": "Omar Khaled",
+    "url": "https://github.com/omar-hanafy"
+  },
+  "plugins": [
+    {
+      "name": "biometric-vault",
+      "displayName": "Biometric Vault",
+      "source": "./agent_plugin/biometric-vault",
+      "description": "Package-specific skills for the biometric_vault Flutter plugin: correct integration with per-platform setup, symptom-to-fix troubleshooting, consumer test fakes, and safe migration from biometric_storage.",
+      "version": "1.1.1",
+      "author": {
+        "name": "Omar Khaled",
+        "url": "https://github.com/omar-hanafy"
+      },
+      "homepage": "https://pub.dev/packages/biometric_vault",
+      "repository": "https://github.com/omar-hanafy/biometric_vault",
+      "license": "MIT",
+      "keywords": [
+        "flutter",
+        "dart",
+        "biometrics",
+        "secure-storage",
+        "keychain",
+        "keystore"
+      ]
+    }
+  ]
+}

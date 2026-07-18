@@ -60,6 +60,9 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      - name: Validate agent plugin
+        run: dart tool/validate_agent_plugin.dart
+
       - name: Test package
         run: flutter test
 
