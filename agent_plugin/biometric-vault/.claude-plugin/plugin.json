@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "biometric-vault",
+  "displayName": "Biometric Vault",
+  "version": "1.1.1",
+  "description": "Package-specific skills for the biometric_vault Flutter plugin: correct integration with per-platform setup, symptom-to-fix troubleshooting, consumer test fakes, and safe migration from biometric_storage.",
+  "author": {
+    "name": "Omar Khaled",
+    "url": "https://github.com/omar-hanafy"
+  },
+  "homepage": "https://pub.dev/packages/biometric_vault",
+  "repository": "https://github.com/omar-hanafy/biometric_vault",
+  "license": "MIT",
+  "keywords": [
+    "flutter",
+    "dart",
+    "biometrics",
+    "secure-storage",
+    "keychain",
+    "keystore"
+  ]
+}

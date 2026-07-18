@@ -8,6 +8,40 @@ optional biometric protection. Secrets are encrypted by the platform keystore
 and, when you ask for it, unlocked only after Face ID / Touch ID /
 fingerprint / device-credential authentication.
 
+## AI coding-assistant support
+
+This repository ships an installable **agent plugin** (a coding-agent
+extension, not a runtime feature of the Dart package) with package-specific
+skills for **Claude Code** and **OpenAI Codex**: integration with the exact
+per-platform setup, symptom-to-fix troubleshooting, a ready test fake, and a
+data-safe migration from `biometric_storage`.
+
+Claude Code (CLI and desktop app):
+
+```
+/plugin marketplace add omar-hanafy/biometric_vault
+/plugin install biometric-vault@biometric-vault
+```
+
+OpenAI Codex (CLI 0.110+ and ChatGPT desktop/web Work mode; start a new
+session after installing):
+
+```
+codex plugin marketplace add omar-hanafy/biometric_vault
+codex plugin add biometric-vault@biometric-vault
+```
+
+Then just describe the task ("store our refresh token behind Face ID, but
+background rotation must not prompt") - the right skill activates
+automatically - or invoke one explicitly:
+`/biometric-vault:integrate-biometric-vault` in Claude Code,
+`$integrate-biometric-vault` in Codex. The plugin contains only markdown
+skills and one copyable test fake - no hooks, MCP servers, or automatic
+scripts. Skills target `biometric_vault` 1.x. Full details, the skill
+inventory, example prompts, per-skill installation for the Codex IDE
+extension, and update/uninstall commands:
+[agent_plugin/biometric-vault/README.md](https://github.com/omar-hanafy/biometric_vault/blob/main/agent_plugin/biometric-vault/README.md).
+
 ## Highlights
 
 - **Typed errors, no surprises.** Every failure is a subtype of the sealed
@@ -186,7 +220,10 @@ write replaces the keychain item, which never evaluates its access control.
 
 One consequence worth knowing: after the user changes biometric enrollment,
 reads throw `StorageInvalidatedException` as usual, but writes keep working,
-so your next sign-in can silently re-provision the secret.
+so your next sign-in can silently re-provision the secret. Call `delete()`
+before that re-provisioning write (exactly as in the error-handling example
+below): a write alone still encrypts for the invalidated read key, and reads
+would keep failing.
 
 ### Biometry labels and app-lock gates
 

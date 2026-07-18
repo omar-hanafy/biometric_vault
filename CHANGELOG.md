@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.1
+
+No runtime changes.
+
+- AI coding-assistant support: the repository now ships an installable agent
+  plugin for Claude Code and OpenAI Codex with four package-specific skills:
+  `integrate-biometric-vault` (integration with per-platform setup),
+  `troubleshoot-biometric-vault` (symptom-to-fix diagnosis),
+  `test-with-biometric-vault` (faking the vault in consumer tests), and
+  `migrate-from-biometric-storage` (safe API and data migration). See the
+  "AI coding-assistant support" section of the README for installation.
+- Repository-level agent guidance (`AGENTS.md`) and a plugin validation
+  script (`tool/validate_agent_plugin.dart`) wired into CI. The plugin tree
+  is distributed from the Git repository and excluded from the pub.dev
+  archive.
+
 ## 1.1.0
 
 - `StorageFileInitOptions.silentWrites`: writes never show an authentication
