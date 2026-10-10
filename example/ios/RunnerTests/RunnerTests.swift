@@ -1,6 +1,6 @@
 // Shared test suite for the Darwin (iOS + macOS) implementation of
 // biometric_vault. The macOS RunnerTests.swift is a symlink to this file,
-// mirroring how macos/Classes/BiometricVaultImpl.swift is shared.
+// mirroring how the Swift packages share BiometricVaultImpl.swift.
 //
 // These tests exercise BiometricVaultImpl through its injectable seams:
 // - KeychainClient: fake keychain, no real Security framework item storage.
@@ -592,6 +592,28 @@ final class RunnerTests: XCTestCase {
                 code: "SecurityError")
   }
 
+  func testSilentWriteStopsWhenDeletingExistingItemFails() {
+    let impl = makeImpl()
+    initStore(impl, options: ["silentWrites": true])
+    keychain.deleteResult = errSecInteractionNotAllowed
+
+    assertError(invoke(impl, "write", promptArgs(extra: ["content": "replacement"])),
+                code: "AuthError:Canceled")
+
+    XCTAssertEqual(keychain.deleteQueries.count, 1)
+    XCTAssertTrue(keychain.addedAttributes.isEmpty,
+                  "failed deletion must not proceed to adding a replacement")
+  }
+
+  func testSilentWriteAddsWhenNoPreviousItemExists() {
+    let impl = makeImpl()
+    initStore(impl, options: ["silentWrites": true])
+    keychain.deleteResult = errSecItemNotFound
+
+    XCTAssertNil(invoke(impl, "write", promptArgs(extra: ["content": "first"])))
+    XCTAssertEqual(keychain.addedAttributes.count, 1)
+  }
+
   func testSilentWritesLeaveReadsGated() {
     let impl = makeImpl()
     initStore(impl, options: ["silentWrites": true])
@@ -895,6 +917,19 @@ final class RunnerTests: XCTestCase {
 
     XCTAssertEqual(contextFactoryCallCount, 1)
     XCTAssertEqual(contexts.first?.localizedReason, "Second reason")
+  }
+
+  func testReusedContextClearsPreviousLocalizedReasonForEmptyPrompt() {
+    let impl = makeImpl()
+    initStore(
+      impl,
+      options: ["darwinTouchIDAuthenticationForceReuseContextDurationSeconds": 60])
+
+    invoke(impl, "read", promptArgs(access: "First reason"))
+    invoke(impl, "read", promptArgs(access: ""))
+
+    XCTAssertEqual(contextFactoryCallCount, 1)
+    XCTAssertEqual(contexts.first?.localizedReason, "")
   }
 
   // MARK: Real keychain round trip

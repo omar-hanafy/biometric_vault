@@ -353,7 +353,7 @@ class BiometricVaultPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         return InitOptions(
             androidAuthenticationValidityDuration =
                 (options["androidAuthenticationValidityDurationSeconds"] as? Number)
-                    ?.toInt()?.seconds,
+                    ?.toLong()?.seconds,
             authenticationRequired = options["authenticationRequired"] as? Boolean ?: true,
             androidBiometricOnly = options["androidBiometricOnly"] as? Boolean ?: true,
             silentWrites = options["silentWrites"] as? Boolean ?: false,

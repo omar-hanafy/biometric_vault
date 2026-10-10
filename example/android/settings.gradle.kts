@@ -19,8 +19,8 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "8.13.1" apply false
-    // Declared (not applied) so Built-in Kotlin resolves this KGP version.
+    id("com.android.application") version "9.1.0" apply false
+    // Upgrade AGP's built-in Kotlin compiler to Flutter's supported version.
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
 }
 

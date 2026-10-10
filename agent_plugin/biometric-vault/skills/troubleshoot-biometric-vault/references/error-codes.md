@@ -91,8 +91,10 @@ at creation).
 | `RetrieveError` | Darwin keychain returned non-UTF-8/unexpected data | Report a bug |
 
 `ArgumentError` (not a `BiometricVaultException`) at `getStorage`: empty
-name or path separators in the name, or `androidBiometricOnly: false`
-without `androidAuthenticationValidityDuration`.
+name, `.`/`..`, path separators or NUL in the name, or an authenticated
+store with `androidBiometricOnly: false` but no validity duration. An
+authenticated Android validity duration must contain 1..2147483647 whole
+seconds; zero, subsecond-only, negative, and overflowing windows are rejected.
 
 ## CanAuthenticateResponse quick map
 

@@ -17,8 +17,8 @@ delete first or use a fresh store name.
 | Option | Platform | Default | Effect |
 |---|---|---|---|
 | `authenticationRequired` | all | `true` | `false` = keystore/keychain encryption only, NO prompt ever; any code in the app can read. Required `false` on Linux (native init rejects `true`). |
-| `androidBiometricOnly` | Android | `true` | `true` = Class 3 biometrics only, cancel button shown. `false` = system offers PIN/pattern/password fallback; needs API 30+ (silently ignored below) and REQUIRES `androidAuthenticationValidityDuration` (else `ArgumentError` at `getStorage`). |
-| `androidAuthenticationValidityDuration` | Android | `null` | `null` = auth-per-use key: a fresh biometric authentication cryptographically bound (CryptoObject) to every operation. Set = time-bound key: one authentication unlocks the key for the window, device credential accepted (API 30+), and the prompt only appears when the window expired. |
+| `androidBiometricOnly` | Android | `true` | `true` = Class 3 biometrics only, cancel button shown. `false` = system offers PIN/pattern/password fallback; needs API 30+ (silently ignored below) and requires `androidAuthenticationValidityDuration` for authenticated stores (else `ArgumentError` at `getStorage`). |
+| `androidAuthenticationValidityDuration` | Android | `null` | `null` = auth-per-use key: a fresh biometric authentication cryptographically bound (CryptoObject) to every operation. Set = a positive window of 1..2147483647 whole seconds (fractional seconds are truncated); invalid windows throw `ArgumentError` for authenticated stores. Time-bound key: one authentication unlocks the key for the window, device credential accepted (API 30+), and the prompt only appears when the window expired. |
 | `darwinBiometricOnly` | iOS/macOS | `true` | `true` = `.biometryCurrentSet`: passcode NOT accepted, and the item becomes unreadable if the user re-enrolls biometry. `false` = `.userPresence`: passcode fallback offered, item survives re-enrollment. |
 | `darwinTouchIDAuthenticationAllowableReuseDuration` | iOS/macOS | `null` | Grace period after a device unlock with Touch ID (system-capped at 5 minutes, clamped natively). Does NOT cover repeat keychain prompts. |
 | `darwinTouchIDAuthenticationForceReuseContextDuration` | iOS/macOS | `null` | The plugin reuses one authenticated `LAContext` for this long, so reads/writes within the window do not re-prompt. This is the darwin equivalent of the Android validity duration. |
@@ -41,7 +41,7 @@ delete first or use a fresh store name.
 
 ## Store names
 
-Plain identifiers only: non-empty, no `/` or `\` (and not `.`/`..`).
+Plain identifiers only: non-empty, no `/`, `\`, or NUL (and not `.`/`..`).
 Anything else throws `ArgumentError` before any platform code runs. Each
 name is an isolated store with its own key; prefer several small stores over
 one JSON blob when values have different protection needs.

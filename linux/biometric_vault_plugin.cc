@@ -5,6 +5,8 @@
 #include <sys/utsname.h>
 #include <libsecret/secret.h>
 
+#include "biometric_vault_arguments.h"
+
 #define BIOMETRIC_SCHEMA  biometric_get_schema ()
 
 const char kBadArgumentsError[] = "Bad Arguments";
@@ -45,18 +47,9 @@ static FlMethodResponse* _handle_error(const gchar* message, GError *error) {
                    kSecurityAccessError, error_message, error_details));
 }
 
-static FlMethodResponse *handleInit(FlValue *args) {
-  FlValue* options = fl_value_lookup_string(args, "options");
-  if (fl_value_get_type(options) != FL_VALUE_TYPE_MAP) {
-    return FL_METHOD_RESPONSE(fl_method_error_response_new(
-        kBadArgumentsError, "Argument map missing or malformed", nullptr));
-  }
-  FlValue* authRequired = fl_value_lookup_string(options, "authenticationRequired");
-  if (fl_value_get_bool(authRequired)) {
-    return FL_METHOD_RESPONSE(fl_method_error_response_new(
-        kBadArgumentsError, "Linux plugin only supports non-authenticated secure storage", nullptr));
-  }
-  return FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_bool(true)));
+static FlMethodResponse *handleInit() {
+  g_autoptr(FlValue) result = fl_value_new_bool(true);
+  return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
 
 const SecretSchema *
@@ -84,7 +77,8 @@ static void on_password_stored(GObject *source, GAsyncResult *result,
     response = _handle_error("Failed to store secret", error);
     g_error_free(error);
   } else {
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_bool(true)));
+    g_autoptr(FlValue) value = fl_value_new_bool(true);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(value));
   }
 
   fl_method_call_respond(method_call, response, nullptr);
@@ -105,7 +99,8 @@ static void on_password_cleared(GObject *source, GAsyncResult *result,
     g_error_free(error);
 
   } else {
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_bool(removed)));
+    g_autoptr(FlValue) value = fl_value_new_bool(removed);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(value));
   }
   fl_method_call_respond(method_call, response, nullptr);
   g_object_unref(method_call);
@@ -126,10 +121,11 @@ static void on_password_lookup(GObject *source, GAsyncResult *result,
   } else if (password == NULL) {
     /* password will be null, if no matching password found */
     g_warning("Failed to lookup password (not found).");
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_null()));
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else {
     /* ... do something with the password */
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(fl_value_new_string(password)));
+    g_autoptr(FlValue) value = fl_value_new_string(password);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(value));
     secret_password_free(password);
   }
   fl_method_call_respond(method_call, response, nullptr);
@@ -145,11 +141,19 @@ biometric_vault_plugin_handle_method_call(BiometricVaultPlugin *self,
   const gchar *method = fl_method_call_get_name(method_call);
   FlValue *args = fl_method_call_get_args(method_call);
 
+  const gchar* argument_error = biometric_vault_validate_arguments(method, args);
+  if (argument_error != nullptr) {
+    response = FL_METHOD_RESPONSE(fl_method_error_response_new(
+        kBadArgumentsError, argument_error, nullptr));
+    fl_method_call_respond(method_call, response, nullptr);
+    return;
+  }
+
   if (strcmp(method, "canAuthenticate") == 0) {
     g_autoptr(FlValue) result = fl_value_new_string("ErrorHwUnavailable");
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
   } else if (strcmp(method, "init") == 0) {
-    response = handleInit(args);
+    response = handleInit();
   } else if (IS_METHOD(method, kMethodWrite)) {
     METHOD_PARAM_NAME(name, args);
     // const gchar *name =

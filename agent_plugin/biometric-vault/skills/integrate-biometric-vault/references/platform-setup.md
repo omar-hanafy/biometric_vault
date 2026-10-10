@@ -1,7 +1,8 @@
 # Per-platform setup for biometric_vault
 
 Facts below come from the plugin's native sources. Baseline: Flutter 3.44+ /
-Dart 3.12+, biometric_vault ^1.1.0.
+Dart 3.12+, biometric_vault ^1.1.2. Current release checks use Flutter 3.47.7 /
+Dart 3.13.5.
 
 ## Android (API 24+)
 
@@ -40,6 +41,7 @@ Behavior notes:
 
 - Device-credential fallback (`androidBiometricOnly: false`) requires
   Android 11 (API 30); below that the plugin logs and ignores the fallback.
+  Capability checks use the same biometric-only policy on those older devices.
 - Keys are hardware-backed: StrongBox when the device has it, TEE otherwise
   (automatic fallback).
 

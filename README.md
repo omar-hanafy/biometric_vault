@@ -81,7 +81,8 @@ in `biometric_vault` and encrypt your bulk data with it.
 | Windows | Credential Manager | none |
 | Web | plaintext `localStorage`, **not secure** | none |
 
-Release baseline: Flutter `3.44` / Dart `3.12`.
+Minimum supported SDKs: Flutter `3.44` / Dart `3.12`.
+The release is verified with Flutter `3.47.7` / Dart `3.13.5`.
 
 ## Getting started
 
@@ -89,7 +90,7 @@ Add the dependency:
 
 ```yaml
 dependencies:
-  biometric_vault: ^1.1.0
+  biometric_vault: ^1.1.2
 ```
 
 ### Android

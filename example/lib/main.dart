@@ -104,6 +104,7 @@ class MyAppState extends State<MyApp> {
   @override
   void dispose() {
     logMessages.log.removeListener(_logChanged);
+    _writeController.dispose();
     super.dispose();
   }
 
@@ -132,6 +133,7 @@ class MyAppState extends State<MyApp> {
                 final authStorageSupport = await _checkAuthenticate(
                   _authStorageInitOptions,
                 );
+                if (!mounted) return;
                 if (authStorageSupport == CanAuthenticateResponse.unsupported) {
                   _logger.severe(
                     'Unable to use authenticate. Unable to get storage.',
@@ -178,6 +180,7 @@ class MyAppState extends State<MyApp> {
                     ),
                   );
                 }
+                if (!mounted) return;
                 setState(() {});
                 _logger.info('initiailzed $baseName');
               },
@@ -387,8 +390,12 @@ class StorageActions extends StatelessWidget {
           child: const Text('delete'),
           onPressed: () async {
             _logger.fine('deleting...');
-            await storageFile.delete();
-            _logger.info('Deleted.');
+            try {
+              await storageFile.delete();
+              _logger.info('Deleted.');
+            } on BiometricVaultException catch (e) {
+              _handleStorageError(e);
+            }
           },
         ),
       ],

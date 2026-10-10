@@ -5,6 +5,7 @@ import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
 import './biometric_vault.dart';
+import 'storage_name.dart';
 
 /// The Windows implementation of [BiometricVault].
 ///
@@ -40,6 +41,7 @@ class Win32BiometricVaultPlugin extends BiometricVault {
     bool forceInit = false,
     PromptInfo promptInfo = PromptInfo.defaultValues,
   }) async {
+    validateStorageName(name);
     return BiometricVaultFile(this, namePrefix + name, promptInfo);
   }
 

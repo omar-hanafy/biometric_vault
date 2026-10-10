@@ -8,7 +8,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:8.13.1")
+        classpath("com.android.tools.build:gradle:9.1.0")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
     }
 }
@@ -53,9 +53,9 @@ android {
 }
 
 dependencies {
-    implementation("androidx.biometric:biometric:1.4.0-alpha05")
-    // core 1.19.x requires AGP 9.1+ / compileSdk 37, which the Flutter
-    // toolchain does not support yet; 1.18.0 is the newest consumable version.
+    implementation("androidx.biometric:biometric:1.1.0")
+    // core 1.19.x requires compileSdk 37; use the latest release compatible
+    // with Flutter's supported compileSdk 36.
     implementation("androidx.core:core:1.18.0")
     implementation("androidx.fragment:fragment:1.8.9")
     testImplementation("junit:junit:4.13.2")
