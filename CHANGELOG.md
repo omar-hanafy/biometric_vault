@@ -15,8 +15,11 @@
 - Reject malformed Linux method-channel arguments without weakening the
   authentication requirement, and release temporary native response values.
 - Update the Windows dependency to `win32` 6.4 and Android build tooling to
-  Flutter's supported AGP 9.1 / Gradle 9.3.1 combination. Use stable AndroidX
-  Biometric 1.1.0. The minimum Flutter 3.44 / Dart 3.12 requirement and stored
+  Flutter's supported AGP 9.1 / Gradle 9.3.1 combination in the example.
+  The plugin inherits the consuming app's AGP and Kotlin versions. Use stable
+  AndroidX Biometric 1.1.0 and Fragment 1.9.1.
+- Declare the Flutter framework dependency explicitly in the iOS and macOS
+  Swift packages. The minimum Flutter 3.44 / Dart 3.12 requirement and stored
   data formats are unchanged.
 
 ## 1.1.1
