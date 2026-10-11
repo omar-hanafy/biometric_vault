@@ -21,6 +21,7 @@
 - Declare the Flutter framework dependency explicitly in the iOS and macOS
   Swift packages. The minimum Flutter 3.44 / Dart 3.12 requirement and stored
   data formats are unchanged.
+- Add the Face ID usage description required by the iOS example.
 
 ## 1.1.1
 
