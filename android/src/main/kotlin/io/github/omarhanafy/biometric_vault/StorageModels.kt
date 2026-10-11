@@ -31,7 +31,32 @@ data class InitOptions(
      * store's RSA public key and never prompt; only reads authenticate.
      */
     val silentWrites: Boolean = false,
-)
+) {
+    /** Validates key authorization before a store can be initialized. */
+    fun validateStorageOptions() {
+        if (!authenticationRequired) return
+        val validity = androidAuthenticationValidityDuration
+        require(validity != null || androidBiometricOnly) {
+            "androidBiometricOnly must be true when androidAuthenticationValidityDuration is " +
+                "null: auth-per-use keys can only be unlocked by a strong biometric."
+        }
+        require(validity == null || validity.inWholeSeconds in 1..Int.MAX_VALUE.toLong()) {
+            "androidAuthenticationValidityDuration must contain between 1 and " +
+                "${Int.MAX_VALUE} whole seconds."
+        }
+    }
+}
+
+/** Capability checks and prompts must offer the same supported authenticators. */
+internal object AuthenticationPolicy {
+    fun allowedAuthenticators(biometricOnly: Boolean, sdkInt: Int): Int =
+        if (biometricOnly || sdkInt < 30) {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        }
+}
 
 /** Texts and behavior of the system authentication prompt, from the Dart side. */
 data class AndroidPromptInfo(

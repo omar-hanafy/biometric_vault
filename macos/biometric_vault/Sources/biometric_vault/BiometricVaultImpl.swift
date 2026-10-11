@@ -1,5 +1,5 @@
 // Shared implementation for iOS and macOS.
-// This file lives in macos/Classes and is symlinked into ios/Classes,
+// This file lives in the macOS Swift package and is symlinked into iOS,
 // so both platforms always compile the exact same code.
 //
 // Keychain access follows Apple's current guidance:
@@ -421,9 +421,9 @@ class BiometricVaultFile {
     }
     // The keychain prompt shows LAContext.localizedReason; this replaces the
     // deprecated kSecUseOperationPrompt query attribute.
-    if let reason, !reason.isEmpty {
-      context.localizedReason = reason
-    }
+    // A reused context must not retain a previous operation's prompt when
+    // this operation supplies no reason.
+    context.localizedReason = reason ?? ""
     return context
   }
 
@@ -493,7 +493,11 @@ class BiometricVaultFile {
         // access control (it only applies to future reads), and skipping the
         // update path avoids the prompt SecItemUpdate would trigger on a
         // protected item.
-        _ = env.keychain.delete(baseQuery)
+        let deleteStatus = env.keychain.delete(baseQuery)
+        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
+          completeError(deleteStatus, while: "replacing data", result)
+          return
+        }
         let status = env.keychain.add(attributes)
         guard status == errSecSuccess else {
           completeError(status, while: "writing data", result)

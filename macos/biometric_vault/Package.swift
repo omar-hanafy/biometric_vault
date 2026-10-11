@@ -11,11 +11,15 @@ let package = Package(
     products: [
         .library(name: "biometric-vault", targets: ["biometric_vault"])
     ],
-    dependencies: [],
+    dependencies: [
+        .package(name: "FlutterFramework", path: "../FlutterFramework")
+    ],
     targets: [
         .target(
             name: "biometric_vault",
-            dependencies: [],
+            dependencies: [
+                .product(name: "FlutterFramework", package: "FlutterFramework")
+            ],
             resources: [
                 .process("PrivacyInfo.xcprivacy")
             ]

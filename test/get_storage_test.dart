@@ -44,7 +44,15 @@ void main() {
     });
 
     group('name validation', () {
-      for (final bad in ['', 'a/b', r'a\b', '../escape']) {
+      for (final bad in [
+        '',
+        '.',
+        '..',
+        'a/b',
+        r'a\b',
+        '../escape',
+        'a\u0000b',
+      ]) {
         test("rejects '$bad' before any platform call", () async {
           await expectLater(
             BiometricVault().getStorage(bad),
@@ -61,6 +69,58 @@ void main() {
     });
 
     group('android options validation', () {
+      test(
+        'ignores credential-window options for unauthenticated storage',
+        () async {
+          await BiometricVault().getStorage(
+            'store',
+            options: const StorageFileInitOptions(
+              authenticationRequired: false,
+              androidBiometricOnly: false,
+            ),
+          );
+          expect(harness.calls, hasLength(1));
+        },
+      );
+
+      for (final duration in [
+        Duration.zero,
+        const Duration(milliseconds: 999),
+        const Duration(seconds: -1),
+        const Duration(seconds: 2147483648),
+      ]) {
+        test(
+          'rejects invalid authentication validity $duration before init',
+          () async {
+            await expectLater(
+              BiometricVault().getStorage(
+                'store',
+                options: StorageFileInitOptions(
+                  androidAuthenticationValidityDuration: duration,
+                ),
+              ),
+              throwsArgumentError,
+            );
+            expect(harness.calls, isEmpty);
+          },
+        );
+      }
+
+      test(
+        'accepts the maximum supported authentication validity window',
+        () async {
+          await BiometricVault().getStorage(
+            'store',
+            options: const StorageFileInitOptions(
+              androidAuthenticationValidityDuration: Duration(
+                seconds: 2147483647,
+              ),
+            ),
+          );
+          expect(harness.calls, hasLength(1));
+        },
+      );
+
       test('rejects androidBiometricOnly=false without a validity duration '
           'on android', () async {
         await expectLater(

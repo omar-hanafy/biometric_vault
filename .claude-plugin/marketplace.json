@@ -11,7 +11,7 @@
       "displayName": "Biometric Vault",
       "source": "./agent_plugin/biometric-vault",
       "description": "Package-specific skills for the biometric_vault Flutter plugin: correct integration with per-platform setup, symptom-to-fix troubleshooting, consumer test fakes, and safe migration from biometric_storage.",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "author": {
         "name": "Omar Khaled",
         "url": "https://github.com/omar-hanafy"

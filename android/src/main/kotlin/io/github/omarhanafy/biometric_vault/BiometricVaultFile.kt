@@ -63,15 +63,13 @@ class BiometricVaultFile(
             baseName.isNotEmpty() &&
                 !baseName.contains('/') &&
                 !baseName.contains('\\') &&
+                !baseName.contains('\u0000') &&
                 baseName != "." &&
                 baseName != "..",
         ) {
             "Storage name '$baseName' must be a plain file name without path separators."
         }
-        require(!(options.androidAuthenticationValidityDuration == null && !options.androidBiometricOnly)) {
-            "androidBiometricOnly must be true when androidAuthenticationValidityDuration is " +
-                "null: auth-per-use keys can only be unlocked by a strong biometric."
-        }
+        options.validateStorageOptions()
         StorageLog.d { "Initialized $this with $options" }
     }
 

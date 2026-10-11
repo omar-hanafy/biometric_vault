@@ -87,12 +87,14 @@ at creation).
 | `Bad Arguments` + "Linux plugin only supports non-authenticated secure storage" | Store created without `authenticationRequired: false` on Linux | Create Linux stores with `authenticationRequired: false` |
 | `MissingArgument` / `InvalidArguments` | Wire-level misuse; effectively unreachable through the public API | Report a bug |
 | `Unexpected Error` | Uncaught native exception; details carry the native stack | Report a bug with details |
-| `ReadError`/`WriteError`/`DeleteError` | Windows Credential Manager failures (message carries Win32 error) | Inspect message |
+| `ReadError`/`WriteError`/`DeleteError` | Windows Credential Manager failures, or web storage blocked / quota exceeded | Inspect the message and details; on web, check browser storage access and available quota |
 | `RetrieveError` | Darwin keychain returned non-UTF-8/unexpected data | Report a bug |
 
 `ArgumentError` (not a `BiometricVaultException`) at `getStorage`: empty
-name or path separators in the name, or `androidBiometricOnly: false`
-without `androidAuthenticationValidityDuration`.
+name, `.`/`..`, path separators or NUL in the name, or an authenticated
+store with `androidBiometricOnly: false` but no validity duration. An
+authenticated Android validity duration must contain 1..2147483647 whole
+seconds; zero, subsecond-only, negative, and overflowing windows are rejected.
 
 ## CanAuthenticateResponse quick map
 

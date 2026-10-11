@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.2
+
+- Apply the documented storage-name checks consistently on all platforms,
+  including reserved names and embedded NUL characters.
+- Keep capability-check and web storage failures inside the typed
+  `BiometricVaultException` hierarchy.
+- Fix Android capability checks with device-credential fallback on Android
+  10 and earlier. Reject invalid authentication validity windows before
+  native key creation, and allow unauthenticated stores to ignore these
+  authentication-only options.
+- Stop Darwin silent writes when deleting the previous Keychain item fails,
+  and clear stale prompt text when reusing an authentication context.
+- Reject malformed Linux method-channel arguments without weakening the
+  authentication requirement, and release temporary native response values.
+- Update the Windows dependency to `win32` 6.4 and Android build tooling to
+  Flutter's supported AGP 9.1 / Gradle 9.3.1 combination in the example.
+  The plugin inherits the consuming app's AGP and Kotlin versions. Use stable
+  AndroidX Biometric 1.1.0 and Fragment 1.9.1.
+- Declare the Flutter framework dependency explicitly in the iOS and macOS
+  Swift packages. The minimum Flutter 3.44 / Dart 3.12 requirement and stored
+  data formats are unchanged.
+- Add the Face ID usage description required by the iOS example.
+
 ## 1.1.1
 
 No runtime changes.

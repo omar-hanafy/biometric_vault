@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
+import 'storage_name.dart';
+
 /// The device's ability to authenticate the user, as reported by
 /// [BiometricVault.canAuthenticate].
 ///
@@ -67,9 +69,9 @@ enum CanAuthenticateResponse {
 
   /// This platform or embedder cannot authenticate at all.
   ///
-  /// Returned on Windows, on the web, and for unknown platforms. The storage
-  /// backends on those platforms are NOT protected by user authentication;
-  /// see the package README for what each platform provides instead.
+  /// Returned when no supported authentication implementation is available.
+  /// The registered Windows and web storage implementations instead return
+  /// [errorHwUnavailable] and still allow unauthenticated storage.
   unsupported,
 }
 
@@ -370,6 +372,10 @@ class StorageFileInitOptions {
   /// window and the device credential is accepted as a fallback on
   /// Android 11 and newer.
   ///
+  /// When authentication is required, must represent at least one whole
+  /// second and at most 2,147,483,647 seconds; smaller fractions are truncated
+  /// to whole seconds in the platform protocol.
+  ///
   /// Must be set when [androidBiometricOnly] is `false`;
   /// [BiometricVault.getStorage] rejects that combination on Android.
   ///
@@ -654,12 +660,15 @@ abstract class BiometricVault extends PlatformInterface {
   /// created and ignored afterwards. The returned [BiometricVaultFile]
   /// uses [promptInfo] for operations that do not pass their own.
   ///
-  /// The [name] must be a plain identifier: not empty and without `/` or
-  /// `\` characters; anything else throws an [ArgumentError] before any
+  /// The [name] must be a plain identifier: not empty, not `.` or `..`, and
+  /// without `/`, `\`, or NUL characters; anything else throws an [ArgumentError]
+  /// before any
   /// platform code runs. On Android, combining
-  /// `androidBiometricOnly: false` with a `null`
+  /// `authenticationRequired: true`, `androidBiometricOnly: false` with a `null`
   /// [StorageFileInitOptions.androidAuthenticationValidityDuration] also
   /// throws an [ArgumentError] because the platform cannot express it.
+  /// Authentication validity windows on Android must contain between one
+  /// and 2,147,483,647 whole seconds when authentication is required.
   ///
   /// If [forceInit] is `true` and the storage was already initialized in
   /// this process, throws a [BiometricVaultPluginException] with code
@@ -712,9 +721,10 @@ class MethodChannelBiometricVault extends BiometricVault {
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
       case TargetPlatform.linux:
-        final response = await _channel.invokeMethod<String>(
-          'canAuthenticate',
-          {'options': (options ?? const StorageFileInitOptions()).toJson()},
+        final response = await _transformErrors(
+          _channel.invokeMethod<String>('canAuthenticate', {
+            'options': (options ?? const StorageFileInitOptions()).toJson(),
+          }),
         );
         final ret = _canAuthenticateMapping[response];
         if (ret == null) {
@@ -812,7 +822,7 @@ class MethodChannelBiometricVault extends BiometricVault {
     bool forceInit = false,
     PromptInfo promptInfo = PromptInfo.defaultValues,
   }) async {
-    _validateName(name);
+    validateStorageName(name);
     final resolvedOptions = options ?? const StorageFileInitOptions();
     _validateOptionsForPlatform(resolvedOptions);
     await _transformErrors(
@@ -825,32 +835,13 @@ class MethodChannelBiometricVault extends BiometricVault {
     return BiometricVaultFile(this, name, promptInfo);
   }
 
-  /// Rejects names that would escape the per-store namespace.
-  ///
-  /// Android additionally validates this natively; checking here gives every
-  /// platform the same fail-fast behavior before any IO happens.
-  static void _validateName(String name) {
-    if (name.isEmpty) {
-      throw ArgumentError.value(
-        name,
-        'name',
-        'Storage name must not be empty.',
-      );
-    }
-    if (name.contains('/') || name.contains(r'\')) {
-      throw ArgumentError.value(
-        name,
-        'name',
-        'Storage name must be a plain name without path separators.',
-      );
-    }
-  }
-
   /// Rejects option combinations the current platform cannot express, so
   /// misconfiguration fails at development time instead of surfacing as a
   /// native error during the first read.
   static void _validateOptionsForPlatform(StorageFileInitOptions options) {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        options.authenticationRequired) {
       if (!options.androidBiometricOnly &&
           options.androidAuthenticationValidityDuration == null) {
         throw ArgumentError(
@@ -858,6 +849,17 @@ class MethodChannelBiometricVault extends BiometricVault {
           'androidAuthenticationValidityDuration to be set, because '
           'auth-per-use keys only support biometric authentication on '
           'Android.',
+        );
+      }
+      final validitySeconds =
+          options.androidAuthenticationValidityDuration?.inSeconds;
+      if (validitySeconds != null &&
+          (validitySeconds < 1 || validitySeconds > 2147483647)) {
+        throw ArgumentError.value(
+          options.androidAuthenticationValidityDuration,
+          'androidAuthenticationValidityDuration',
+          'Authentication validity duration must contain between one and '
+              '2,147,483,647 whole seconds.',
         );
       }
     }

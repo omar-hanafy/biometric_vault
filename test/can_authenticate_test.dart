@@ -1,5 +1,6 @@
 import 'package:biometric_vault/biometric_vault.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'channel_harness.dart';
@@ -50,6 +51,30 @@ void main() {
   });
 
   group('request payload', () {
+    test(
+      'wraps native capability failures in the typed exception hierarchy',
+      () async {
+        harness.handler = (call) => throw PlatformException(
+          code: 'SecurityError',
+          message: 'Capability check failed',
+          details: 'native detail',
+        );
+        await expectLater(
+          BiometricVault().canAuthenticate(),
+          throwsA(
+            isA<BiometricVaultPluginException>()
+                .having((error) => error.code, 'code', 'SecurityError')
+                .having(
+                  (error) => error.message,
+                  'message',
+                  'Capability check failed',
+                )
+                .having((error) => error.details, 'details', 'native detail'),
+          ),
+        );
+      },
+    );
+
     test('sends default options when none are given', () async {
       harness.handler = (call) => 'Success';
       await BiometricVault().canAuthenticate();

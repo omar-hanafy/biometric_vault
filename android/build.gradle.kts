@@ -1,18 +1,6 @@
 group = "io.github.omarhanafy.biometric_vault"
 version = "1.0-SNAPSHOT"
 
-buildscript {
-    val kotlinVersion = "2.4.0"
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.android.tools.build:gradle:8.13.1")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
-    }
-}
-
 rootProject.allprojects {
     repositories {
         google()
@@ -23,6 +11,8 @@ rootProject.allprojects {
 // Kotlin support comes from Flutter's Built-in Kotlin (Flutter 3.44+), so the
 // Kotlin Gradle Plugin must not be applied here:
 // https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+// Resolve AGP/Kotlin from the consuming Flutter app so the library does not
+// force newer Gradle or Kotlin versions than that app supports.
 plugins {
     id("com.android.library")
 }
@@ -53,10 +43,10 @@ android {
 }
 
 dependencies {
-    implementation("androidx.biometric:biometric:1.4.0-alpha05")
-    // core 1.19.x requires AGP 9.1+ / compileSdk 37, which the Flutter
-    // toolchain does not support yet; 1.18.0 is the newest consumable version.
+    implementation("androidx.biometric:biometric:1.1.0")
+    // core 1.19.x requires compileSdk 37; use the latest release compatible
+    // with Flutter's supported compileSdk 36.
     implementation("androidx.core:core:1.18.0")
-    implementation("androidx.fragment:fragment:1.8.9")
+    implementation("androidx.fragment:fragment:1.9.1")
     testImplementation("junit:junit:4.13.2")
 }

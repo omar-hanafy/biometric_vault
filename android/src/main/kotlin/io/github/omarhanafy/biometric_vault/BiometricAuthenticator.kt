@@ -7,7 +7,6 @@ import android.os.Build
 import androidx.annotation.MainThread
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
-import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -32,7 +31,12 @@ class BiometricAuthenticator(private val context: Context) {
             return CanAuthenticateResponse.Success
         }
         val response = CanAuthenticateResponse.fromBiometricManagerCode(
-            biometricManager.canAuthenticate(allowedAuthenticators(options.androidBiometricOnly)),
+            biometricManager.canAuthenticate(
+                AuthenticationPolicy.allowedAuthenticators(
+                    options.androidBiometricOnly,
+                    Build.VERSION.SDK_INT,
+                ),
+            ),
         )
         if (response == CanAuthenticateResponse.ErrorNoBiometricEnrolled &&
             !options.androidBiometricOnly &&
@@ -114,8 +118,11 @@ class BiometricAuthenticator(private val context: Context) {
             },
         )
 
-        val biometricOnly =
-            options.androidBiometricOnly || Build.VERSION.SDK_INT < Build.VERSION_CODES.R
+        val allowedAuthenticators = AuthenticationPolicy.allowedAuthenticators(
+            options.androidBiometricOnly,
+            Build.VERSION.SDK_INT,
+        )
+        val biometricOnly = allowedAuthenticators == BIOMETRIC_STRONG
         if (biometricOnly && !options.androidBiometricOnly) {
             StorageLog.d {
                 "androidBiometricOnly was false, but device credential fallback " +
@@ -133,10 +140,10 @@ class BiometricAuthenticator(private val context: Context) {
             // A negative button is required (and only allowed) when the device
             // credential is not offered as a fallback.
             builder
-                .setAllowedAuthenticators(BIOMETRIC_STRONG)
+                .setAllowedAuthenticators(allowedAuthenticators)
                 .setNegativeButtonText(promptInfo.negativeButton)
         } else {
-            builder.setAllowedAuthenticators(BIOMETRIC_STRONG or DEVICE_CREDENTIAL)
+            builder.setAllowedAuthenticators(allowedAuthenticators)
         }
 
         if (cipher != null) {
@@ -145,9 +152,6 @@ class BiometricAuthenticator(private val context: Context) {
             prompt.authenticate(builder.build())
         }
     }
-
-    private fun allowedAuthenticators(biometricOnly: Boolean): Int =
-        if (biometricOnly) BIOMETRIC_STRONG else BIOMETRIC_STRONG or DEVICE_CREDENTIAL
 
     private fun isDeviceSecure(): Boolean {
         val keyguardManager =
