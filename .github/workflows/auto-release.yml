@@ -111,11 +111,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
         shell: bash
         run: |
           set -euo pipefail
           tag="$RELEASE_TAG"
-          args=("$tag" --verify-tag --generate-notes --target "$GITHUB_SHA")
+          notes="$RUNNER_TEMP/release-notes.md"
+          awk -v version="$RELEASE_VERSION" '
+            $0 == "## " version { in_release = 1; next }
+            in_release && /^## / { exit }
+            in_release { print }
+          ' CHANGELOG.md > "$notes"
+          if [[ ! -s "$notes" ]]; then
+            echo "No changelog entry found for $RELEASE_VERSION."
+            exit 1
+          fi
+          args=("$tag" --verify-tag --title "$tag" --notes-file "$notes" --target "$GITHUB_SHA")
           if [[ "${GITHUB_REF_NAME}" == 'dev' ]]; then
             args+=(--prerelease)
           fi
