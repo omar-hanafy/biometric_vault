@@ -218,6 +218,17 @@ jobs:
           print(next(device["udid"] for runtime, values in devices.items()
                      if "iOS" in runtime for device in values
                      if "iPhone" in device["name"]))')
+          test_status=0
           xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
             -destination "platform=iOS Simulator,id=$simulator" \
-            -only-testing:RunnerTests CODE_SIGNING_ALLOWED=NO
+            -only-testing:RunnerTests -resultBundlePath ../build/ios-native-tests.xcresult \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- || test_status=$?
+          if [[ "$test_status" -ne 0 && -d ../build/ios-native-tests.xcresult ]]; then
+            xcrun xcresulttool get test-results summary \
+              --path ../build/ios-native-tests.xcresult || printf 'Unable to read test summary\n'
+            xcrun xcresulttool get test-results test-details \
+              --path ../build/ios-native-tests.xcresult \
+              --test-id 'RunnerTests/testEndToEndRoundTripAgainstRealKeychain()' \
+              || printf 'Unable to read Keychain test details\n'
+          fi
+          exit "$test_status"
